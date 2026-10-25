@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f4f1ea">
   <title>Recall Folio</title>
-  <link rel="stylesheet" href="styles.css?v=13">
+  <link rel="stylesheet" href="styles.css?v=17">
   <script>
     (function () {
       var saved = localStorage.getItem("recall-theme");
@@ -19,22 +19,34 @@
 <body>
   <header class="top">
     <div class="brand">
-      <p class="eyebrow">Recall Folio</p>
+      <button id="brand" type="button">Recall Folio</button>
       <h1 id="sheet-title">학습 시트</h1>
     </div>
+    <nav class="tabs" id="tabs" aria-label="학습 구분">
+      <button type="button" data-tab="map" aria-pressed="true">지도</button>
+      <button type="button" data-tab="learn">학습</button>
+      <button type="button" data-tab="exam">모의</button>
+    </nav>
     <div class="actions">
       <p id="progress" aria-live="polite">맵</p>
       <button id="read-toggle" type="button" aria-pressed="false">줄글</button>
-      <button id="cover-toggle" type="button" aria-expanded="true" hidden>핵심 가리기</button>
+      <button id="cover-toggle" type="button" aria-expanded="true" hidden>그림 가리기</button>
       <button id="qa-open" type="button" aria-expanded="false">QA</button>
       <button id="theme-toggle" type="button" aria-label="화면 모드 전환">라이트</button>
     </div>
   </header>
 
-  <div class="stage">
-    <div class="mind" id="mind" aria-label="조선 전기 마인드맵"></div>
+  <div class="stage" id="view-map">
+    <div class="chapters" id="chapters"></div>
+    <div class="mind" id="mind"></div>
     <main id="sheet" hidden></main>
   </div>
+  <div id="view-learn" hidden></div>
+  <div id="view-exam" hidden></div>
+  <form id="gate" hidden>
+    <label>확인 <input id="gate-input" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+    <button type="submit">들어가기</button>
+  </form>
   <aside id="qa" hidden>
     <div class="qa-head">
       <strong>QA</strong>
@@ -43,7 +55,10 @@
     <ul id="qa-list"></ul>
   </aside>
 
-  <script src="content.js?v=13"></script>
-  <script src="app.js?v=13"></script>
+  <script src="content.js?v=17"></script>
+  <script src="more.js?v=17"></script>
+  <script src="learn.js?v=17"></script>
+  <script src="exams.js?v=17"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>

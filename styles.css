@@ -88,49 +88,79 @@ h1 {
   cursor: pointer;
 }
 
-.reveal { margin-top: 4px; }
-
 .card.is-covered ol { display: none; }
 
 .layout {
   display: grid;
-  grid-template-columns: 240px minmax(0, 760px);
-  gap: 28px;
-  align-items: start;
-  width: min(1120px, calc(100% - 56px));
+  gap: 18px;
+  width: min(1080px, calc(100% - 40px));
   margin: 0 auto;
-  padding: 12px 0 64px;
+  padding: 8px 0 32px;
 }
 
-.rail {
-  position: sticky;
-  top: 16px;
+.map {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: stretch;
 }
 
-.rail-label {
+.hub {
+  margin: 0;
+  writing-mode: vertical-rl;
+  border-right: 2px solid var(--accent);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.branch {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  position: relative;
   margin: 0 0 8px;
+}
+
+.branch::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 15px;
+  width: 12px;
+  height: 2px;
+  background: var(--accent);
+}
+
+.branch p {
+  margin: 7px 0 0;
   color: var(--muted);
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.rail a {
-  display: block;
-  margin: 0 0 6px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  color: inherit;
-  text-decoration: none;
+.nodes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.rail a span {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
+.node {
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
 }
 
-.rail a[aria-current="true"] {
+.node[aria-current="true"] {
   background: var(--chip);
+  border-color: var(--accent);
 }
 
 .card {
@@ -209,32 +239,29 @@ li::before {
   #progress { width: 100%; text-align: right; }
 
   .layout {
-    grid-template-columns: 1fr;
     width: min(100% - 24px, 640px);
     gap: 12px;
-    padding-bottom: 40px;
+    padding-bottom: 28px;
   }
 
-  .rail {
-    position: static;
+  .map { grid-template-columns: 1fr; }
+
+  .hub {
+    writing-mode: horizontal-tb;
+    border-right: 0;
+    border-bottom: 2px solid var(--accent);
+    letter-spacing: 0.08em;
+    padding-bottom: 6px;
   }
 
-  #nav {
-    display: flex;
-    gap: 8px;
+  .branch::before { display: none; }
+
+  .nodes {
+    flex-wrap: nowrap;
     overflow-x: auto;
-    padding-bottom: 4px;
   }
 
-  .rail a {
-    flex: 0 0 auto;
-    margin: 0;
-    background: var(--card);
-    border: 1px solid var(--line);
-    white-space: nowrap;
-  }
-
-  .rail a span { display: none; }
+  .node { white-space: nowrap; }
 
   .card {
     padding: 22px 18px 12px;

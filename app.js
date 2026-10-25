@@ -1,13 +1,31 @@
 (function () {
   var root = document.documentElement;
   var toggle = document.getElementById("theme-toggle");
-  var coverAll = document.getElementById("cover-toggle");
+  var coverBtn = document.getElementById("cover-toggle");
   var progress = document.getElementById("progress");
   var nav = document.getElementById("nav");
   var sheet = document.getElementById("sheet");
   var themeMeta = document.querySelector('meta[name="theme-color"]');
   var sheets = Array.isArray(window.SHEETS) ? window.SHEETS : [];
+  var groups = [
+    { name: "건국", ids: ["wihwado", "four-no", "choi", "founding"] },
+    { name: "왕권", ids: ["taejong", "sejong", "sejo", "seongjong"] },
+    { name: "제도", ids: ["central", "samsa", "local", "military", "school", "exam"] },
+    { name: "대외", ids: ["diplomacy"] },
+    { name: "사림", ids: ["hungu", "sarim", "sahwa-early", "eulsa", "lineage", "seowon", "faction"] },
+    { name: "사회", ids: ["culture", "status"] }
+  ];
+  var order = [];
+  var byId = {};
   var current = 0;
+  var covered = false;
+
+  sheets.forEach(function (item) { byId[item.id] = item; });
+  groups.forEach(function (group) {
+    group.ids.forEach(function (id) {
+      if (byId[id]) order.push(id);
+    });
+  });
 
   function applyTheme(theme) {
     root.setAttribute("data-theme", theme);
@@ -25,79 +43,40 @@
       .replace(/"/g, "&quot;");
   }
 
-  function cards() {
-    return sheet.querySelectorAll(".card");
-  }
-
-  function setCover(card, covered) {
-    card.classList.toggle("is-covered", covered);
-    var button = card.querySelector(".reveal");
-    if (!button) return;
-    button.textContent = covered ? "핵심 보기" : "핵심 가리기";
-    button.setAttribute("aria-expanded", covered ? "false" : "true");
-  }
-
-  function refreshCoverAll() {
-    var list = cards();
-    var covered = list.length > 0 && Array.prototype.every.call(list, function (card) {
-      return card.classList.contains("is-covered");
-    });
-    coverAll.textContent = covered ? "모두 보기" : "모두 가리기";
-  }
-
-  function showProgress(index) {
-    var list = cards();
-    if (!list.length) return;
-    current = Math.max(0, Math.min(index, list.length - 1));
-    progress.textContent = (current + 1) + " / " + list.length;
-    var links = nav.querySelectorAll("a");
-    Array.prototype.forEach.call(links, function (link, linkIndex) {
-      if (linkIndex === current) link.setAttribute("aria-current", "true");
-      else link.removeAttribute("aria-current");
-    });
-    var link = links[current];
-    if (link && nav.scrollWidth > nav.clientWidth) {
-      var left = link.getBoundingClientRect().left - nav.getBoundingClientRect().left + nav.scrollLeft;
-      nav.scrollTo({ left: Math.max(0, left - 12) });
-    }
+  function paintCover() {
+    var card = sheet.querySelector(".card");
+    if (card) card.classList.toggle("is-covered", covered);
+    coverBtn.textContent = covered ? "핵심 보기" : "핵심 가리기";
+    coverBtn.setAttribute("aria-expanded", covered ? "false" : "true");
   }
 
   function render() {
-    if (!sheets.length) {
-      sheet.innerHTML = '<p class="empty">아직 자료가 없습니다.</p>';
-      progress.textContent = "0 / 0";
+    var activeId = order[current];
+    progress.textContent = order.length ? (current + 1) + " / " + order.length : "0 / 0";
+
+    nav.innerHTML = groups.map(function (group) {
+      var nodes = group.ids.filter(function (id) { return byId[id]; }).map(function (id) {
+        var item = byId[id];
+        var on = id === activeId ? ' aria-current="true"' : "";
+        return '<button type="button" class="node" data-id="' + esc(id) + '"' + on + ">" + esc(item.title) + "</button>";
+      }).join("");
+      return '<div class="branch"><p>' + esc(group.name) + "</p><div class=\"nodes\">" + nodes + "</div></div>";
+    }).join("");
+
+    var item = byId[activeId];
+    if (!item) {
+      sheet.innerHTML = '<p class="empty">자료가 없습니다.</p>';
       return;
     }
-
-    nav.innerHTML = sheets.map(function (item) {
-      return '<a href="#s-' + esc(item.id) + '"><span>' + esc(item.unit) + "</span>" + esc(item.title) + "</a>";
+    var points = (item.points || []).map(function (point) {
+      return "<li>" + esc(point) + "</li>";
     }).join("");
-
-    sheet.innerHTML = sheets.map(function (item) {
-      var points = (item.points || []).map(function (point) {
-        return "<li>" + esc(point) + "</li>";
-      }).join("");
-      return '<article class="card" id="s-' + esc(item.id) + '">' +
-        '<p class="unit">' + esc(item.unit) + "</p>" +
-        "<h2>" + esc(item.title) + "</h2>" +
-        '<p class="summary">' + esc(item.summary) + "</p>" +
-        '<button class="reveal" type="button" aria-expanded="true">핵심 가리기</button>' +
-        "<ol>" + points + "</ol>" +
-        "</article>";
-    }).join("");
-
-    showProgress(0);
-    refreshCoverAll();
-
-    if ("IntersectionObserver" in window) {
-      var observer = new IntersectionObserver(function (entries) {
-        var visible = entries.filter(function (entry) { return entry.isIntersecting; });
-        if (!visible.length) return;
-        visible.sort(function (a, b) { return b.intersectionRatio - a.intersectionRatio; });
-        showProgress(Array.prototype.indexOf.call(cards(), visible[0].target));
-      }, { rootMargin: "-30% 0px -45% 0px", threshold: [0.2, 0.6] });
-      Array.prototype.forEach.call(cards(), function (card) { observer.observe(card); });
-    }
+    sheet.innerHTML = '<article class="card">' +
+      '<p class="unit">' + esc(item.unit) + "</p>" +
+      "<h2>" + esc(item.title) + "</h2>" +
+      '<p class="summary">' + esc(item.summary) + "</p>" +
+      "<ol>" + points + "</ol></article>";
+    paintCover();
   }
 
   toggle.addEventListener("click", function () {
@@ -106,27 +85,18 @@
     applyTheme(next);
   });
 
-  coverAll.addEventListener("click", function () {
-    var list = cards();
-    var cover = !Array.prototype.every.call(list, function (card) {
-      return card.classList.contains("is-covered");
-    });
-    Array.prototype.forEach.call(list, function (card) { setCover(card, cover); });
-    refreshCoverAll();
-  });
-
-  sheet.addEventListener("click", function (event) {
-    var button = event.target.closest(".reveal");
-    if (!button) return;
-    setCover(button.closest(".card"), button.getAttribute("aria-expanded") === "true");
-    refreshCoverAll();
+  coverBtn.addEventListener("click", function () {
+    covered = !covered;
+    paintCover();
   });
 
   nav.addEventListener("click", function (event) {
-    var link = event.target.closest("a");
-    if (!link) return;
-    var links = nav.querySelectorAll("a");
-    showProgress(Array.prototype.indexOf.call(links, link));
+    var node = event.target.closest(".node");
+    if (!node) return;
+    var index = order.indexOf(node.getAttribute("data-id"));
+    if (index < 0) return;
+    current = index;
+    render();
   });
 
   applyTheme(root.getAttribute("data-theme") || "light");

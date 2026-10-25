@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f1ea">
+  <title>Recall Folio</title>
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    (function () {
+      var saved = localStorage.getItem("recall-theme");
+      var theme = saved === "dark" || saved === "light"
+        ? saved
+        : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <p class="eyebrow">Recall Folio</p>
+      <h1 id="sheet-title">학습 시트</h1>
+    </div>
+    <button id="theme-toggle" type="button" aria-label="화면 모드 전환">라이트</button>
+  </header>
+
+  <div class="layout">
+    <nav class="rail" aria-label="단원">
+      <p class="rail-label">단원</p>
+      <div id="nav"></div>
+    </nav>
+    <main id="sheet"></main>
+  </div>
+
+  <script src="content.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -61,7 +61,23 @@ h1 {
   letter-spacing: -0.03em;
 }
 
-#theme-toggle {
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#progress {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+#theme-toggle,
+#cover-toggle,
+.reveal {
   border: 1px solid var(--line);
   background: var(--card);
   color: var(--ink);
@@ -71,6 +87,10 @@ h1 {
   font-size: 14px;
   cursor: pointer;
 }
+
+.reveal { margin-top: 4px; }
+
+.card.is-covered ol { display: none; }
 
 .layout {
   display: grid;
@@ -184,6 +204,9 @@ li::before {
   }
 
   h1 { font-size: 22px; }
+
+  .actions { flex-wrap: wrap; justify-content: flex-end; }
+  #progress { width: 100%; text-align: right; }
 
   .layout {
     grid-template-columns: 1fr;

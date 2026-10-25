@@ -155,7 +155,7 @@
       return group.ids.filter(function (id) { return byId[id]; }).map(function (id) {
         var item = byId[id];
         var visual = visuals[id] || {};
-        return '<article class="prose-block">' +
+        return '<article class="prose-block" id="p-' + esc(id) + '" data-id="' + esc(id) + '">' +
           '<p class="unit">' + esc(group.name) + "</p>" +
           "<h2>" + esc(item.title) + "</h2>" +
           "<p>" + esc(visual.prose || item.summary) + "</p></article>";
@@ -163,15 +163,45 @@
     }).join("");
   }
 
+  function headerLine() {
+    var bar = document.querySelector(".top");
+    return (bar ? bar.offsetHeight : 0) + 8;
+  }
+
+  function visibleProseId() {
+    var line = headerLine();
+    var best = "";
+    var bestDist = Infinity;
+    Array.prototype.forEach.call(sheet.querySelectorAll(".prose-block"), function (block) {
+      var dist = Math.abs(block.getBoundingClientRect().top - line);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = block.getAttribute("data-id");
+      }
+    });
+    return best;
+  }
+
   function render() {
     var prose = readMode === "prose";
+    var focusId = prose ? activeId() : "";
     document.body.classList.toggle("is-prose", prose);
+    mind.hidden = prose;
     readBtn.textContent = prose ? "그림" : "줄글";
     readBtn.setAttribute("aria-pressed", prose ? "true" : "false");
     if (prose) renderProse();
     else {
       renderMap();
       renderSheet();
+    }
+    if (prose && focusId) {
+      var target = document.getElementById("p-" + focusId);
+      if (target) {
+        var delta = target.getBoundingClientRect().top - headerLine();
+        window.scrollTo(0, Math.max(0, window.scrollY + delta));
+      }
+    } else {
+      window.scrollTo(0, 0);
     }
     window.clearTimeout(qaTimer);
     qaTimer = window.setTimeout(runQa, 40);
@@ -200,11 +230,13 @@
     var proseText = sheet.textContent || "";
     var schoolOk = proseText.indexOf("수도 경비") >= 0 && proseText.indexOf("서인은 이이") >= 0 && proseText.indexOf("원은 아직 멸망하지") >= 0;
     var checks = prose ? [
+      ["모드와 화면이 같음", mind.hidden === true, readMode],
       ["줄글 24단락", proseCount === 24, String(proseCount)],
       ["맵은 숨음", mind.offsetParent === null || getComputedStyle(mind).display === "none", "mind"],
       ["학교 서술 유지", schoolOk, "한성부·최영·서인"],
       ["문장으로 읽힘", sheet.querySelectorAll(".prose-block p").length >= 24, "paragraph"]
     ] : [
+      ["모드와 화면이 같음", mind.hidden === false && !document.body.classList.contains("is-prose"), readMode],
       ["화면이 세로로 늘지 않음", pageFits, document.documentElement.scrollHeight + " / " + window.innerHeight],
       ["중심이 가운데 하나", document.querySelectorAll(".core").length === 1, "core " + document.querySelectorAll(".core").length],
       ["자료 24장", order.length === 24, String(order.length)],
@@ -230,7 +262,13 @@
   });
 
   readBtn.addEventListener("click", function () {
-    readMode = readMode === "prose" ? "picture" : "prose";
+    if (readMode === "prose") {
+      var seen = visibleProseId();
+      if (seen) current = Math.max(0, order.indexOf(seen));
+      readMode = "picture";
+    } else {
+      readMode = "prose";
+    }
     localStorage.setItem("recall-read", readMode);
     render();
   });
@@ -271,7 +309,13 @@
     runQa();
   });
 
-  window.addEventListener("resize", function () { render(); });
+  var wasNarrow = narrow();
+  window.addEventListener("resize", function () {
+    if (readMode === "prose" || narrow() === wasNarrow) return;
+    wasNarrow = narrow();
+    renderMap();
+    runQa();
+  });
 
   applyTheme(root.getAttribute("data-theme") || "light");
   render();

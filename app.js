@@ -3,7 +3,6 @@
   var toggle = document.getElementById("theme-toggle");
   var nav = document.getElementById("nav");
   var sheet = document.getElementById("sheet");
-  var title = document.getElementById("sheet-title");
   var themeMeta = document.querySelector('meta[name="theme-color"]');
   var sheets = Array.isArray(window.SHEETS) ? window.SHEETS : [];
 
@@ -46,7 +45,6 @@
         "</article>";
     }).join("");
 
-    title.textContent = sheets[0].unit;
   }
 
   toggle.addEventListener("click", function () {

@@ -1,6 +1,7 @@
 (function () {
   var root = document.documentElement;
   var toggle = document.getElementById("theme-toggle");
+  var readBtn = document.getElementById("read-toggle");
   var coverBtn = document.getElementById("cover-toggle");
   var qaOpen = document.getElementById("qa-open");
   var qaClose = document.getElementById("qa-close");
@@ -11,6 +12,8 @@
   var sheet = document.getElementById("sheet");
   var themeMeta = document.querySelector('meta[name="theme-color"]');
   var sheets = Array.isArray(window.SHEETS) ? window.SHEETS : [];
+  var visuals = window.VISUALS || {};
+  var readMode = localStorage.getItem("recall-read") === "prose" ? "prose" : "picture";
   var groups = [
     { name: "건국", side: "left", color: "#8a3d2f", ids: ["wihwado", "four-no", "choi", "founding"] },
     { name: "왕권", side: "left", color: "#2f5d50", ids: ["taejong", "sejong", "sejo", "seongjong"] },
@@ -109,6 +112,19 @@
       '<div class="wing right">' + right.map(limb).join("") + "</div>";
   }
 
+  function picture(item) {
+    var visual = visuals[item.id] || {};
+    var marks = visual.marks || item.points || [];
+    var shape = visual.shape || "boxes";
+    var body = marks.map(function (mark, index) {
+      var arrow = shape === "flow" && index ? "<i>→</i>" : "";
+      if (shape === "quad") return arrow + '<span><b>' + (index + 1) + "</b>" + esc(mark) + "</span>";
+      if (shape === "split") return "<p>" + esc(mark) + "</p>";
+      return arrow + "<span>" + esc(mark) + "</span>";
+    }).join("");
+    return '<div class="pic ' + esc(shape) + '">' + body + "</div>";
+  }
+
   function renderSheet() {
     var id = activeId();
     if (!id || !byId[id]) {
@@ -119,9 +135,6 @@
       return;
     }
     var item = byId[id];
-    var points = (item.points || []).map(function (point) {
-      return "<li>" + esc(point) + "</li>";
-    }).join("");
     sheet.hidden = false;
     coverBtn.hidden = false;
     progress.textContent = (current + 1) + " / " + order.length;
@@ -129,14 +142,37 @@
       '<p class="unit">' + esc(item.unit) + "</p>" +
       "<h2>" + esc(item.title) + "</h2>" +
       '<p class="summary">' + esc(item.summary) + "</p>" +
-      "<ol>" + points + "</ol></article>";
-    coverBtn.textContent = covered ? "핵심 보기" : "핵심 가리기";
+      picture(item) + "</article>";
+    coverBtn.textContent = covered ? "그림 보기" : "그림 가리기";
     coverBtn.setAttribute("aria-expanded", covered ? "false" : "true");
   }
 
+  function renderProse() {
+    sheet.hidden = false;
+    coverBtn.hidden = true;
+    progress.textContent = "줄글";
+    sheet.innerHTML = groups.map(function (group) {
+      return group.ids.filter(function (id) { return byId[id]; }).map(function (id) {
+        var item = byId[id];
+        var visual = visuals[id] || {};
+        return '<article class="prose-block">' +
+          '<p class="unit">' + esc(group.name) + "</p>" +
+          "<h2>" + esc(item.title) + "</h2>" +
+          "<p>" + esc(visual.prose || item.summary) + "</p></article>";
+      }).join("");
+    }).join("");
+  }
+
   function render() {
-    renderMap();
-    renderSheet();
+    var prose = readMode === "prose";
+    document.body.classList.toggle("is-prose", prose);
+    readBtn.textContent = prose ? "그림" : "줄글";
+    readBtn.setAttribute("aria-pressed", prose ? "true" : "false");
+    if (prose) renderProse();
+    else {
+      renderMap();
+      renderSheet();
+    }
     window.clearTimeout(qaTimer);
     qaTimer = window.setTimeout(runQa, 40);
   }
@@ -151,6 +187,7 @@
   }
 
   function runQa() {
+    var prose = readMode === "prose";
     var pageFits = document.documentElement.scrollHeight <= window.innerHeight + 1;
     var clipped = false;
     Array.prototype.forEach.call(document.querySelectorAll(".node, .boi, .core, .child-row"), function (el) {
@@ -159,7 +196,15 @@
     var title = sheet.querySelector("h2");
     var selected = byId[activeId()];
     var titleOk = !selected || (title && title.textContent === selected.title);
-    var checks = [
+    var proseCount = document.querySelectorAll(".prose-block").length;
+    var proseText = sheet.textContent || "";
+    var schoolOk = proseText.indexOf("수도 경비") >= 0 && proseText.indexOf("서인은 이이") >= 0 && proseText.indexOf("원은 아직 멸망하지") >= 0;
+    var checks = prose ? [
+      ["줄글 24단락", proseCount === 24, String(proseCount)],
+      ["맵은 숨음", mind.offsetParent === null || getComputedStyle(mind).display === "none", "mind"],
+      ["학교 서술 유지", schoolOk, "한성부·최영·서인"],
+      ["문장으로 읽힘", sheet.querySelectorAll(".prose-block p").length >= 24, "paragraph"]
+    ] : [
       ["화면이 세로로 늘지 않음", pageFits, document.documentElement.scrollHeight + " / " + window.innerHeight],
       ["중심이 가운데 하나", document.querySelectorAll(".core").length === 1, "core " + document.querySelectorAll(".core").length],
       ["자료 24장", order.length === 24, String(order.length)],
@@ -181,6 +226,12 @@
     var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
     localStorage.setItem("recall-theme", next);
     applyTheme(next);
+    render();
+  });
+
+  readBtn.addEventListener("click", function () {
+    readMode = readMode === "prose" ? "picture" : "prose";
+    localStorage.setItem("recall-read", readMode);
     render();
   });
 

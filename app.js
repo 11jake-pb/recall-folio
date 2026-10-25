@@ -23,7 +23,23 @@
   var stories = window.STORIES || {};
   var shortName = window.SHORT || {};
   var lessons = window.LESSONS || [];
-  var exams = window.EXAMS || [];
+  var exams = mixExams(window.EXAMS || []);
+  var pickedIndex = -1;
+
+  function mixExams(source) {
+    var buckets = { "전기": [], "전환": [], "후기": [] };
+    source.forEach(function (exam, index) {
+      var part = index < 2 ? "전기" : index === 2 ? "전환" : "후기";
+      exam.questions.forEach(function (q) { buckets[part].push(q); });
+    });
+    var rounds = [];
+    for (var i = 0; i < 5; i++) {
+      var questions = buckets["전기"].splice(0, 4).concat(buckets["전환"].splice(0, 2), buckets["후기"].splice(0, 4));
+      questions.forEach(function (q, index) { q.part = index < 4 ? "전기" : index < 6 ? "전환" : "후기"; });
+      rounds.push({ id: "r" + (i + 1), title: "제" + (i + 1) + "회", questions: questions });
+    }
+    return rounds;
+  }
   var byId = {};
   sheets.forEach(function (item) { byId[item.id] = item; });
 
@@ -78,6 +94,10 @@
       .replace(/"/g, "&quot;");
   }
 
+  function narrow() {
+    return window.matchMedia("(max-width: 800px)").matches;
+  }
+
   function angles(count) {
     if (count <= 1) return [0];
     if (count === 4) return [-140, -50, 40, 130];
@@ -123,11 +143,12 @@
     mind.innerHTML = '<div class="flower" aria-label="' + esc(data.core.replace("\n", " ")) + ' 마인드맵">' +
       data.groups.map(function (group, index) {
         var angle = list[index];
-        var on = group.name === openGroup ? ' aria-current="true"' : "";
-        return '<div class="arm" style="--a:' + angle + 'deg;--branch:' + group.color + '">' +
+        var on = group.name === openGroup;
+        return '<div class="arm' + (on ? " is-open" : "") + '" style="--a:' + angle + 'deg;--branch:' + group.color + '">' +
           '<span class="ray"></span>' +
-          '<button type="button" class="petal" data-group="' + esc(group.name) + '"' + on + ">" + esc(group.name) + "</button></div>";
+          '<button type="button" class="petal" data-group="' + esc(group.name) + '"' + (on ? ' aria-current="true"' : "") + ">" + esc(group.name) + "</button></div>";
       }).join("") +
+      (openGroup ? armChips(data) : "") +
       '<p class="core">' + esc(data.core).replace(/\n/g, "<br>") + "</p></div>";
     var group = null;
     data.groups.forEach(function (item) { if (item.name === openGroup) group = item; });
@@ -138,16 +159,81 @@
       progress.textContent = data.name;
       return;
     }
-    var chips = group.ids.map(function (id) {
+    sheet.hidden = false;
+    coverBtn.hidden = !current;
+    progress.textContent = data.name;
+    coverBtn.textContent = covered ? "그림 보기" : "그림 가리기";
+    sheet.innerHTML = '<div class="nest" style="--branch:' + group.color + '"><p class="nest-name">' + esc(group.name) + "</p>" +
+      '<div class="nest-row">' + chipsFor(group) + "</div>" + nestBody(group) + "</div>";
+    window.requestAnimationFrame(placeArmInfo);
+  }
+
+  function chipsFor(group) {
+    return group.ids.map(function (id) {
       var on = id === current ? ' aria-current="true"' : "";
       return '<button type="button" class="node" data-id="' + esc(id) + '"' + on + ">" + esc(shortName[id] || id) + "</button>";
     }).join("");
-    sheet.hidden = false;
-    coverBtn.hidden = !current;
-    progress.textContent = data.name + " · " + group.name;
-    coverBtn.textContent = covered ? "그림 보기" : "그림 가리기";
-    sheet.innerHTML = '<div class="nest"><p class="nest-name" style="--branch:' + group.color + '">' + esc(group.name) +
-      '</p><div class="nest-row">' + chips + "</div>" + (current ? bloom(current) : "") + "</div>";
+  }
+
+  function armChips(data) {
+    var group = null;
+    data.groups.forEach(function (item) { if (item.name === openGroup) group = item; });
+    if (!group || narrow()) return "";
+    return '<div class="arm-info">' + chipsFor(group) + "</div>";
+  }
+
+  function nestBody(group) {
+    if (current && byId[current]) return bloom(current);
+    return '<div class="facts">' + group.ids.map(function (id) {
+      var item = byId[id];
+      if (!item) return "";
+      return "<p><b>" + esc(shortName[id] || item.title) + "</b> " + esc(item.summary) + "</p>";
+    }).join("") + "</div>";
+  }
+
+  function placeArmInfo() {
+    var info = document.querySelector(".arm-info");
+    var petal = document.querySelector(".petal[aria-current='true']");
+    var flower = document.querySelector(".flower");
+    if (!info || !petal || !flower || narrow()) return;
+    flower.style.marginTop = "";
+    var fr = flower.getBoundingClientRect();
+    var pr = petal.getBoundingClientRect();
+    var cx = fr.width / 2;
+    var cy = fr.height / 2;
+    var px = pr.left - fr.left + pr.width / 2;
+    var py = pr.top - fr.top + pr.height / 2;
+    var dx = px - cx;
+    var dy = py - cy;
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ux = dx / len;
+    var uy = dy / len;
+    var hw = info.offsetWidth / 2;
+    var hh = info.offsetHeight / 2;
+    var reach = hw * Math.abs(ux) + hh * Math.abs(uy);
+    var dist = Math.max(pr.width, pr.height) / 2 + reach + 14;
+    var left = px + ux * dist;
+    var top = py + uy * dist;
+    var absLeft = fr.left + left;
+    var absTop = fr.top + top;
+    var minX = hw + 8;
+    var maxX = window.innerWidth - hw - 8;
+    var minY = headerLine() + hh + 6;
+    var maxY = window.innerHeight - hh - 8;
+    if (absLeft < minX || absLeft > maxX || absTop < minY || absTop > maxY) {
+      left = px - uy * (hw + pr.width / 2 + 16);
+      top = py + ux * (hh + pr.height / 2 + 16);
+      absLeft = Math.max(minX, Math.min(maxX, fr.left + left));
+      absTop = Math.max(minY, Math.min(maxY, fr.top + top));
+      left = absLeft - fr.left;
+      top = absTop - fr.top;
+    }
+    info.style.left = left + "px";
+    info.style.top = top + "px";
+    var chapters = document.querySelector(".chapters");
+    if (!chapters) return;
+    var gap = chapters.getBoundingClientRect().bottom + 10 - info.getBoundingClientRect().top;
+    flower.style.marginTop = gap > 0 ? (8 + gap) + "px" : "";
   }
 
   function renderStory() {
@@ -189,41 +275,72 @@
     return null;
   }
 
-  function renderPath() {
-    learnEl.innerHTML = '<ol class="path">' + lessons.map(function (lesson) {
-      var log = learnLog[lesson.id];
-      var done = log && log.done;
-      return '<li><button type="button" class="step' + (done ? " done" : "") + '" data-lesson="' + esc(lesson.id) + '">' +
-        "<small>" + esc(lesson.chapter) + "</small>" + esc(lesson.title) + "</button></li>";
-    }).join("") + "</ol>";
+  function lessonOpen(index) {
+    if (index === 0) return true;
+    var prev = learnLog[lessons[index - 1].id];
+    return !!(prev && prev.done);
   }
 
-  function renderDrill() {
-    var lesson = lessonById(lessonId);
-    if (!lesson) return renderPath();
-    var item = lesson.items[step];
-    if (!item) {
-      learnEl.innerHTML = '<div class="drill"><p class="kicker">' + esc(lesson.chapter) + "</p><h2>이 칸을 마쳤다</h2>" +
-        "<p>" + esc(String(learnLog[lesson.id].correct)) + " / " + lesson.items.length + " 맞았다.</p>" +
-        '<button type="button" id="lesson-back">길로 돌아가기</button></div>';
-      return;
+  function learnStats() {
+    var done = 0;
+    var correct = 0;
+    lessons.forEach(function (lesson) {
+      var log = learnLog[lesson.id];
+      if (log && log.done) done += 1;
+      if (log) correct += log.correct || 0;
+    });
+    return { done: done, total: lessons.length, correct: correct, pct: lessons.length ? Math.round(done / lessons.length * 100) : 0 };
+  }
+
+  function drillHtml() {
+    if (!lessonId) {
+      return '<div class="drill"><h2>길에서 칸을 고르면 문제가 나온다</h2><p class="why">앞 칸을 마치면 다음 칸이 열린다.</p></div>';
     }
-    learnEl.innerHTML = '<div class="drill"><p class="kicker">' + esc(lesson.chapter) + " · " + (step + 1) + " / " + lesson.items.length +
+    var lesson = lessonById(lessonId);
+    if (!lesson) return "";
+    var item = lesson.items[step];
+    var log = learnLog[lesson.id] || { correct: 0, done: false };
+    if (!item) {
+      return '<div class="drill"><p class="kicker">' + esc(lesson.chapter) + "</p><h2>" + esc(lesson.title) + " 완료</h2>" +
+        "<p>" + esc(String(log.correct)) + " / " + lesson.items.length + " 맞았다.</p>" +
+        '<button type="button" id="lesson-back">다른 칸</button></div>';
+    }
+    return '<div class="drill"><p class="kicker">' + esc(lesson.chapter) + " · " + esc(lesson.title) + " · " + (step + 1) + " / " + lesson.items.length +
       '</p><h2>' + esc(item.q) + '</h2><div class="choices">' +
       item.choices.map(function (choice, index) {
-        return '<button type="button" class="choice" data-choice="' + index + '">' + esc(choice) + "</button>";
+        var cls = "choice";
+        if (locked && index === item.answer) cls += " is-right";
+        if (locked && index === pickedIndex && pickedIndex !== item.answer) cls += " is-wrong";
+        return '<button type="button" class="' + cls + '" data-choice="' + index + '"' + (locked ? " disabled" : "") + ">" + esc(choice) + "</button>";
       }).join("") + "</div>" +
       (locked ? '<p class="why">' + esc(item.why) + '</p><button type="button" id="next-step">계속</button>' : "") +
-      '<button type="button" id="lesson-back" class="text-btn">그만두기</button></div>';
+      "</div>";
   }
 
   function renderLearn() {
-    progress.textContent = "학습";
+    var stats = learnStats();
+    progress.textContent = stats.pct + "%";
     readBtn.hidden = true;
     coverBtn.hidden = true;
     chaptersEl.hidden = true;
-    if (lessonId) renderDrill();
-    else renderPath();
+    var road = ["전기", "전환", "후기"].map(function (name) {
+      var items = lessons.map(function (lesson, index) {
+        if (lesson.chapter !== name) return "";
+        var log = learnLog[lesson.id];
+        var done = !!(log && log.done);
+        var open = lessonOpen(index);
+        var cls = "bead" + (done ? " is-done" : "") + (lesson.id === lessonId ? " is-current" : "") + (open ? "" : " is-locked");
+        return '<li><button type="button" class="' + cls + '" data-lesson="' + esc(lesson.id) + '"' + (open ? "" : " disabled") + ">" +
+          '<span class="bead-mark">' + (done ? "✓" : String(index + 1)) + "</span><span>" + esc(lesson.title) + "</span>" +
+          (done ? "<small>" + log.correct + "/" + lesson.items.length + "</small>" : "") + "</button></li>";
+      }).join("");
+      return '<section class="road-era"><h3>' + name + "</h3><ol>" + items + "</ol></section>";
+    }).join("");
+    learnEl.innerHTML = '<div class="achieve"><p class="achieve-num">' + stats.pct +
+      '%</p><div><p class="achieve-label">' + stats.done + "칸 완료 · 맞힌 " + stats.correct + "문제</p>" +
+      '<div class="achieve-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + stats.pct +
+      '"><span style="width:' + stats.pct + '%"></span></div></div></div>' +
+      '<div class="learn-layout"><div class="road">' + road + "</div>" + drillHtml() + "</div>";
   }
 
   function examById(id) {
@@ -247,43 +364,35 @@
       var on = item.id === exam.id ? ' aria-pressed="true"' : "";
       return '<button type="button" data-exam="' + esc(item.id) + '"' + on + ">" + esc(item.title) + "</button>";
     }).join("");
-    var live = exam.questions.map(function (item, index) {
+    var score = 0;
+    var max = totalPoints(exam);
+    if (graded) exam.questions.forEach(function (item, index) { if (picks[index] === item.answer) score += item.points; });
+    var questions = exam.questions.map(function (item, index) {
       var chosen = picks[index];
-      return '<fieldset class="exam-q' + (graded ? (chosen === item.answer ? " is-right" : " is-wrong") : "") + '"><legend>' +
-        (index + 1) + ". (" + item.points + "점)</legend><p>" + esc(item.q) + "</p>" +
+      var state = graded ? (chosen === item.answer ? " is-right" : " is-wrong") : "";
+      return '<section class="q-item' + state + '"><p class="q-stem"><b>' + (index + 1) + ".</b> (" + item.points + "점) " + esc(item.q) + '</p><ol class="q-opts">' +
         item.choices.map(function (choice, choiceIndex) {
           var mark = graded && choiceIndex === item.answer ? " is-key" : "";
           var bad = graded && chosen === choiceIndex && chosen !== item.answer ? " is-bad" : "";
-          return '<label class="exam-choice' + mark + bad + '"><input type="radio" name="q' + index + '" value="' + choiceIndex + '"' +
-            (chosen === choiceIndex ? " checked" : "") + (graded ? " disabled" : "") + "> " + esc(choice) + "</label>";
-        }).join("") +
-        (graded ? '<p class="why">' + esc(item.why) + "</p>" : "") + "</fieldset>";
+          return '<li class="' + mark + bad + '"><label><input type="radio" name="q' + index + '" value="' + choiceIndex + '"' +
+            (chosen === choiceIndex ? " checked" : "") + (graded ? " disabled" : "") + "><span>" + choiceMark(choiceIndex) + "</span> " + esc(choice) + "</label></li>";
+        }).join("") + "</ol>" +
+        (graded ? '<p class="why">' + esc(item.why) + "</p>" : "") + "</section>";
     }).join("");
-    var score = 0;
-    if (graded) exam.questions.forEach(function (item, index) { if (picks[index] === item.answer) score += item.points; });
-    examEl.innerHTML = '<div id="exam-live" class="no-print"><div class="rounds">' + rounds + "</div>" +
-      "<h2>" + esc(exam.title) + " · " + esc(exam.focus) + "</h2>" +
-      '<p class="exam-note">학교 원안과 같은 범위로 만든 회차이다. 만점 ' + totalPoints(exam) + "점.</p>" +
-      (graded ? '<p class="score">' + score + " / " + totalPoints(exam) + "점</p>" : "") +
-      "<form id=\"exam-form\">" + live + "</form>" +
-      '<div class="exam-actions"><button type="button" id="grade-exam">채점</button>' +
+    examEl.innerHTML = '<div class="exam-bar no-print"><div class="rounds">' + rounds + "</div></div>" +
+      '<article class="paper-sheet" id="paper"><header class="paper-head"><p>3학년 역사</p><h2>' + esc(exam.title) + "</h2>" +
+      "<p>문항 " + exam.questions.length + " · 만점 " + max + '점</p><p class="paper-meta">이름 ______________　점수 ' +
+      (graded ? score + " / " + max : "______") + "</p></header>" + questions + "</article>" +
+      '<div class="exam-actions no-print"><button type="button" id="grade-exam">채점</button>' +
       '<button type="button" id="reset-exam">다시 풀기</button>' +
       '<button type="button" id="print-exam">문제 인쇄</button>' +
       '<button type="button" id="print-omr">답안지 인쇄</button>' +
-      '<button type="button" id="print-key"' + (graded ? "" : " disabled") + ">정답 인쇄</button></div></div>" +
-      paperHtml(exam) + omrHtml(exam) + keyHtml(exam);
+      '<button type="button" id="print-key"' + (graded ? "" : " disabled") + ">정답 인쇄</button></div>" +
+      omrHtml(exam) + keyHtml(exam);
   }
 
   function choiceMark(index) {
     return ["①", "②", "③", "④", "⑤"][index] || String(index + 1);
-  }
-
-  function paperHtml(exam) {
-    return '<article id="paper"><header class="print-head"><p>Recall Folio ' + esc(exam.title) + "</p><p>이름 __________</p></header><h2>" +
-      esc(exam.focus) + "</h2><ol>" + exam.questions.map(function (item) {
-        return "<li><p>(" + item.points + "점) " + esc(item.q) + "</p><ol>" +
-          item.choices.map(function (choice) { return "<li>" + esc(choice) + "</li>"; }).join("") + "</ol></li>";
-      }).join("") + "</ol></article>";
   }
 
   function omrHtml(exam) {
@@ -304,8 +413,11 @@
 
   function show(name) {
     tab = name;
+    document.body.dataset.tab = name;
+    document.getElementById("sheet-title").textContent = name === "learn" ? "학습" : name === "exam" ? "모의" : "지도";
     document.body.classList.toggle("is-prose", name === "map" && readMode === "prose");
     document.body.classList.toggle("is-scroll", name !== "map" || readMode === "prose" || !!openGroup);
+    document.body.classList.toggle("has-nest", name === "map" && !!openGroup);
     mind.parentElement.hidden = name !== "map";
     learnEl.hidden = name !== "learn";
     examEl.hidden = name !== "exam";
@@ -329,21 +441,39 @@
     var compact = !flower || flower.getBoundingClientRect().width <= 680;
     var storyOk = readMode !== "prose" || tab !== "map" || (sheet.querySelectorAll(".story p").length >= 4 && !sheet.querySelector(".prose-block"));
     var examOk = exams.length === 5 && exams.every(function (exam) {
-      return exam.questions.length === 10 && exam.questions.every(function (item) {
+      var parts = {};
+      var answersOk = exam.questions.every(function (item) {
+        parts[item.part] = true;
         return item.answer >= 0 && item.answer < item.choices.length && item.why;
       });
+      return exam.questions.length === 10 && answersOk && parts["전기"] && parts["전환"] && parts["후기"];
     });
     var learnOk = lessons.length >= 6 && lessons.every(function (lesson) {
       return lesson.items.every(function (item) { return item.answer >= 0 && item.answer < item.choices.length; });
     });
+    var probe = document.createElement("div");
+    probe.className = "stage";
+    probe.hidden = true;
+    document.body.appendChild(probe);
+    var hiddenOk = getComputedStyle(probe).display === "none";
+    probe.remove();
+    var mapLeakOk = tab === "map" || getComputedStyle(document.getElementById("view-map")).display === "none";
+    var learnRoadOk = tab !== "learn" || !!(learnEl.querySelector(".road") && learnEl.querySelector(".achieve"));
+    var examPaperOk = tab !== "exam" || (!!examEl.querySelector(".paper-sheet") && !examEl.querySelector(".flower") && getComputedStyle(document.getElementById("view-map")).display === "none");
+    var branchOk = true;
+    if (tab === "map" && readMode !== "prose" && openGroup) {
+      branchOk = (narrow() || !!document.querySelector(".arm-info")) && !!document.querySelector(".nest .facts, .nest .bloom");
+    }
     var checks = [
       ["학교 서술 유지", schoolOk, "한성부·최영·서인"],
       ["맵이 가로로 길지 않음", compact, flower ? Math.round(flower.getBoundingClientRect().width) + "px" : "없음"],
       ["줄글은 한 편", storyOk, "story"],
       ["자료가 비지 않음", sheets.length >= 24, String(sheets.length)],
-      ["모의 5회 정답 범위", examOk, String(exams.length)],
-      ["학습 문항 정답 범위", learnOk, String(lessons.length)],
-      ["중심이 하나", tab !== "map" || readMode === "prose" || document.querySelectorAll(".flower .core").length === 1, "core"]
+      ["모의는 세 시기를 담고 시험지", examOk && examPaperOk, String(exams.length)],
+      ["학습은 길과 성취", learnOk && learnRoadOk, String(lessons.length)],
+      ["중심이 하나", tab !== "map" || readMode === "prose" || document.querySelectorAll(".flower .core").length === 1, "core"],
+      ["다른 탭에 지도가 안 남음", hiddenOk && mapLeakOk, hiddenOk ? "숨김" : "새어 나옴"],
+      ["가지와 아래에 정보", branchOk, openGroup || "대기"]
     ];
     var passed = checks.filter(function (item) { return item[1]; }).length;
     qaOpen.textContent = "QA " + passed + "/" + checks.length;
@@ -421,6 +551,13 @@
   });
 
   mind.addEventListener("click", function (event) {
+    var node = event.target.closest(".node");
+    if (node) {
+      var id = node.getAttribute("data-id");
+      current = current === id ? "" : id;
+      renderFlower();
+      return;
+    }
     var petal = event.target.closest(".petal");
     if (!petal) return;
     var name = petal.getAttribute("data-group");
@@ -443,47 +580,48 @@
   learnEl.addEventListener("click", function (event) {
     var lessonButton = event.target.closest("[data-lesson]");
     if (lessonButton) {
-      lessonId = lessonButton.getAttribute("data-lesson");
+      if (lessonButton.disabled) return;
+      var nextLesson = lessonButton.getAttribute("data-lesson");
+      var active = lessonById(lessonId);
+      if (nextLesson === lessonId && active && step < active.items.length) return;
+      lessonId = nextLesson;
       step = 0;
       locked = false;
+      pickedIndex = -1;
       learnLog[lessonId] = { correct: 0, done: false };
-      renderDrill();
+      renderLearn();
       return;
     }
     if (event.target.id === "lesson-back") {
       lessonId = "";
       locked = false;
-      renderPath();
+      pickedIndex = -1;
+      renderLearn();
       return;
     }
     if (event.target.id === "next-step") {
       var lesson = lessonById(lessonId);
       step += 1;
       locked = false;
+      pickedIndex = -1;
       if (lesson && step >= lesson.items.length) {
         learnLog[lesson.id] = learnLog[lesson.id] || { correct: 0, done: true };
         learnLog[lesson.id].done = true;
         localStorage.setItem("recall-learn", JSON.stringify(learnLog));
       }
-      renderDrill();
+      renderLearn();
       return;
     }
     var choice = event.target.closest("[data-choice]");
     if (!choice || locked) return;
-    var lesson = lessonById(lessonId);
-    var item = lesson.items[step];
-    var picked = Number(choice.getAttribute("data-choice"));
+    var currentLesson = lessonById(lessonId);
+    var item = currentLesson.items[step];
+    pickedIndex = Number(choice.getAttribute("data-choice"));
     locked = true;
-    learnLog[lesson.id] = learnLog[lesson.id] || { correct: 0, done: false };
-    if (picked === item.answer) learnLog[lesson.id].correct += 1;
+    learnLog[currentLesson.id] = learnLog[currentLesson.id] || { correct: 0, done: false };
+    if (pickedIndex === item.answer) learnLog[currentLesson.id].correct += 1;
     localStorage.setItem("recall-learn", JSON.stringify(learnLog));
-    renderDrill();
-    Array.prototype.forEach.call(learnEl.querySelectorAll(".choice"), function (button) {
-      var index = Number(button.getAttribute("data-choice"));
-      button.disabled = true;
-      if (index === item.answer) button.classList.add("is-right");
-      if (index === picked && picked !== item.answer) button.classList.add("is-wrong");
-    });
+    renderLearn();
   });
 
   examEl.addEventListener("change", function (event) {
@@ -530,6 +668,9 @@
   });
   window.addEventListener("afterprint", function () {
     document.body.classList.remove("print-exam", "print-omr", "print-key");
+  });
+  window.addEventListener("resize", function () {
+    if (tab === "map" && readMode !== "prose" && openGroup) renderFlower();
   });
 
   applyTheme(root.getAttribute("data-theme") || "light");
